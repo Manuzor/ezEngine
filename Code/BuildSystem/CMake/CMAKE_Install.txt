@@ -1,0 +1,39 @@
+#cmake
+
+# Usage:
+#   - Need a valid target name, supplied via the "PROJECT_NAME" variable when including this file.
+# The given target will be associated with the export target "ezEngine".
+
+get_target_property(NAME_PREFIX "${PROJECT_NAME}" IMPORT_PREFIX)
+if(NOT NAME_PREFIX)
+  set(NAME_PREFIX "")
+endif()
+
+# Set install rules for our target.
+install(TARGETS "${PROJECT_NAME}" EXPORT "ezEngine"
+        RUNTIME DESTINATION "Bin/\${CMAKE_INSTALL_CONFIG_NAME}/"
+        LIBRARY DESTINATION "Lib/\${CMAKE_INSTALL_CONFIG_NAME}/"
+        ARCHIVE DESTINATION "Lib/\${CMAKE_INSTALL_CONFIG_NAME}/")
+
+# Install .pdb files.
+install(FILES "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${NAME_PREFIX}${PROJECT_NAME}.pdb"
+       DESTINATION "Bin/\${CMAKE_INSTALL_CONFIG_NAME}/${CMAKE_INSTALL_CONFIG_NAME}/"
+       OPTIONAL) # Most platforms don't have .pdb files.
+
+set(EZ_INSTALLED_TARGETS ${EZ_INSTALLED_TARGETS} ${NAME_PREFIX}${PROJECT_NAME} CACHE INTERNAL "Targets that will be installed.")
+mark_as_advanced(EZ_INSTALLED_TARGETS)
+
+if(INSTALL_LIBRARY)
+  file(APPEND "${CMAKE_BINARY_DIR}/ezEngineInstallTargets.cmake" "add_library(${EZ_EXPORT_NAMESPACE}${PROJECT_NAME} ${INSTALL_LIBRARY} IMPORTED GLOBAL)\n")
+else()
+  file(APPEND "${CMAKE_BINARY_DIR}/ezEngineInstallTargets.cmake" "add_executable(${EZ_EXPORT_NAMESPACE}${PROJECT_NAME} IMPORTED GLOBAL)\n")
+endif()
+
+get_target_property(TARGET_INTERFACE_LIBS ${PROJECT_NAME} INTERFACE_LINK_LIBRARIES)
+if(TARGET_INTERFACE_LIBS)
+  file(APPEND "${CMAKE_BINARY_DIR}/ezEngineInstallTargets.cmake"
+       "set_target_properties(${EZ_EXPORT_NAMESPACE}${PROJECT_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES \"${TARGET_INTERFACE_LIBS}\")\n")
+endif()
+
+unset(NAME_PREFIX)
+unset(INSTALL_LIBRARY)

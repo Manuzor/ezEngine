@@ -54,25 +54,25 @@ if (EZ_COMPILE_ENGINE_AS_DLL)
   add_library (${PROJECT_NAME} SHARED ${ALL_SOURCE_FILES})
 
   # for DLLs we need to know what other libraries to link against
-  target_link_libraries (${PROJECT_NAME} ${LINK_LIBRARIES})
+  target_link_libraries (${PROJECT_NAME} PUBLIC ${LINK_LIBRARIES})
 
   # This sets which linker dependencies are passed through to other libraries.
   # Ie. agains which libraries other libraries are supposed to link, as well.
   # Setting this to empty, means that other libraries will NOT link against
   # any additional libraries, which should not be required anyway, since this
   # is a shared library which should already contain everything.
-  set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES "")  
+  set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES "")
 else ()
   # add the project as a static library
   add_library (${PROJECT_NAME} ${ALL_SOURCE_FILES})
 
-  target_link_libraries (${PROJECT_NAME} ${LINK_LIBRARIES})
+  target_link_libraries (${PROJECT_NAME} PUBLIC ${LINK_LIBRARIES})
 endif ()
 
 if (BUILDSYSTEM_PLATFORM_OSX OR BUILDSYSTEM_PLATFORM_LINUX)
   find_package(X11 REQUIRED)
   include_directories (${X11_X11_INCLUDE_PATH})
-  target_link_libraries (${PROJECT_NAME} ${X11_X11_LIB})
+  target_link_libraries (${PROJECT_NAME} PUBLIC ${X11_X11_LIB})
 endif ()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES IMPORT_PREFIX "ez")
@@ -124,5 +124,12 @@ ADD_TO_TARGET_LIST()
 
 #include ("${CMAKE_SOURCE_DIR}/ThirdParty/exports.cmake")
 
-
-
+if(NOT DO_NOT_INSTALL)
+  if (EZ_COMPILE_ENGINE_AS_DLL)
+    set(INSTALL_LIBRARY SHARED)
+  else()
+    set(INSTALL_LIBRARY STATIC)
+  endif(EZ_COMPILE_ENGINE_AS_DLL)
+  # Create install rules for this application.
+  include(${CMAKE_CURRENT_LIST_DIR}/CMAKE_Install.txt)
+endif(NOT DO_NOT_INSTALL)

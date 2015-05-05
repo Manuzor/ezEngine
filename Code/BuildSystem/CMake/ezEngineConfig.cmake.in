@@ -1,0 +1,117 @@
+
+@PACKAGE_INIT@
+
+# functions
+########################################################################
+
+# Utility function to add a post-build command to the given target.
+function(ez_add_post_build_copy_dlls TARGET_NAME)
+  # only MSVC is supported
+  if(NOT MSVC)
+    return()
+  endif()
+
+  foreach(MODULE ${ARGN})
+    # collect the paths to the module DLLs
+    get_target_property(MODULE_DLL_DEBUG          ${MODULE} IMPORTED_LOCATION_DEBUG)
+    get_target_property(MODULE_DLL_RELEASE        ${MODULE} IMPORTED_LOCATION_RELEASE)
+    get_target_property(MODULE_DLL_MINSIZEREL     ${MODULE} IMPORTED_LOCATION_MINSIZEREL)
+    get_target_property(MODULE_DLL_RELWITHDEBINFO ${MODULE} IMPORTED_LOCATION_RELWITHDEBINFO)
+
+    # actually add the post-build copy command
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       # Only 1 of the following 4 lines will ever be true at once
+                       $<$<CONFIG:Debug>:${MODULE_DLL_DEBUG}>
+                       $<$<CONFIG:Release>:${MODULE_DLL_RELEASE}>
+                       $<$<CONFIG:MinSizeRel>:${MODULE_DLL_MINSIZEREL}>
+                       $<$<CONFIG:RelWithDebInfo>:${MODULE_DLL_RELWITHDEBINFO}>
+                       $<TARGET_FILE_DIR:${TARGET_NAME}>/)
+  endforeach()
+endfunction(ez_add_post_build_copy_dlls)
+
+# Note: This is a recursive function
+function(ez_collect_dependencies COLLECTED_DEPENDENCIES MODULE)
+  # if the dependency is already in the list of COLLECTED_DEPENDENCIES, there is nothing to be done and we return.
+  list(FIND ${COLLECTED_DEPENDENCIES} ${MODULE} DEPENDENCY_LOCATION)
+  if(NOT DEPENDENCY_LOCATION EQUAL -1)
+    return()
+  endif()
+
+  # first of all, we add the current module as a dependency
+  set(LOCALLY_COLLECTED_DEPENDENCIES ${${COLLECTED_DEPENDENCIES}} ${MODULE})
+
+  # then we need to extract the dependencies of the current module
+  unset(MODULE_DEPENDENCIES)
+  get_target_property(MODULE_CONFIGURATIONS ${MODULE} IMPORTED_CONFIGURATIONS)
+  foreach(CFG ${MODULE_CONFIGURATIONS})
+    get_target_property(DEPENDENCY ${MODULE} IMPORTED_LINK_DEPENDENT_LIBRARIES_${CFG})
+    list(APPEND MODULE_DEPENDENCIES ${DEPENDENCY})
+  endforeach()
+
+  # if there are any dependencies for the current module, collect all of them recursively
+  if(MODULE_DEPENDENCIES)
+    list(REMOVE_DUPLICATES MODULE_DEPENDENCIES)
+
+    # recurse for each dependency of the current module
+    foreach(MODULE_DEPENDENCY ${MODULE_DEPENDENCIES})
+      ez_collect_dependencies(LOCALLY_COLLECTED_DEPENDENCIES ${MODULE_DEPENDENCY})
+    endforeach()
+  endif()
+
+  # finally 'export' our locally collected dependencies to the caller env.
+  set(${COLLECTED_DEPENDENCIES} ${LOCALLY_COLLECTED_DEPENDENCIES} PARENT_SCOPE)
+endfunction(ez_collect_dependencies)
+
+# run-time
+########################################################################
+
+# Guard against mutliple inclusions during the same run.
+# ezEngine_FOUND = GLOBAL::ezEngine_FOUND
+get_property(ezEngine_FOUND GLOBAL PROPERTY ezEngine_FOUND)
+if(ezEngine_FOUND)
+  message("ezEngine Include Guard.")
+  return()
+endif(ezEngine_FOUND)
+# ezEngine_FOUND = TRUE
+set(ezEngine_FOUND TRUE)
+# GLOBAL::ezEngine_FOUND = ezEngine_FOUND
+set_property(GLOBAL PROPERTY ezEngine_FOUND "${ezEngine_FOUND}")
+
+set(ezEngine_LIBRARIES @EZ_INSTALLED_TARGETS@)
+
+set(_IMPORT_PREFIX "${PACKAGE_PREFIX_DIR}")
+include("${PACKAGE_PREFIX_DIR}/CMake/ezEngineInstallTargets.cmake")
+foreach(CFG @CMAKE_CONFIGURATION_TYPES@)
+  string(TOLOWER ${CFG} cfg)
+  set(CMAKE_INSTALL_CONFIG_NAME ${CFG})
+  include("${PACKAGE_PREFIX_DIR}/CMake/ezEngine-${cfg}.cmake")
+endforeach()
+unset(cfg)
+
+set(EZ_INCLUDED_CONFIGS "${INCLUDED_CONFIGS}" CACHE INTERNAL "Already included ezEngine config files.")
+
+set_and_check(INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/Code/Engine")
+
+set(ezEngine_INCLUDE_DIR "${INCLUDE_DIR}" CACHE PATH "Include directory of the ezEngine project.")
+
+# Collect the targets of all requested ezEngine components and store the result in ezEngine_LIBRARIES
+#foreach(COMPONENT ${ezEngine_FIND_COMPONENTS})
+#  if(TARGET ${COMPONENT})
+#    list(APPEND ezEngine_LIBRARIES ${COMPONENT})
+#  elseif(ezEngine_FIND_REQUIRED_${COMPONENT})
+#    set(ezEngine_FOUND FALSE)
+#    message(SEND_ERROR "Cannot find target for required ezEngine component: ${COMPONENT}")
+#  endif()
+#endforeach()
+
+# If instructed to copy dlls as a post-build command, collect the dependencies of all requested components.
+if(ezEngine_POST_BUILD_COPY_DLLS)
+  unset(ALL_DEPENDENCIES)
+  # collect all dependencies in ALL_DEPENDENCIES
+  foreach(MODULE ${ezEngine_LIBRARIES})
+    ez_collect_dependencies(ALL_DEPENDENCIES ${MODULE})
+  endforeach()
+  # now that we have all dependencies, set up custom post-build commands to copy the DLLs
+  ez_add_post_build_copy_dlls(${ezEngine_POST_BUILD_COPY_DLLS} ${ALL_DEPENDENCIES})
+endif()

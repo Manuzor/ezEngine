@@ -20,12 +20,19 @@ file (GLOB DIRS "${CMAKE_SOURCE_DIR}/UnitTests/*/CMakeLists.txt")
 # setup the variable where all project-names are stored, that should be exported
 set_property (GLOBAL PROPERTY ALL_KNOWN_PROJECTS "")
 
+# Since some unit tests use hardcoded absolute paths (BUILDSYSTEM_OUTPUT_FOLDER), we prevent installing them (for now).
+set(PREV_DO_NOT_INSTALL ${DO_NOT_INSTALL})
+set(DO_NOT_INSTALL TRUE)
+
 # add all those directories to the to-be-processed queue
 foreach (VAR ${DIRS})
-	get_filename_component (RES ${VAR} PATH)
+  get_filename_component (RES ${VAR} PATH)
 
-	# add directory to the queue
-	add_subdirectory (${RES})
+  # add directory to the queue
+  add_subdirectory (${RES})
 endforeach ()
+
+# Restore the previous state
+set(DO_NOT_INSTALL ${PREV_DO_NOT_INSTALL})
 
 get_property (KNOWN_LIBS GLOBAL PROPERTY ALL_KNOWN_PROJECTS)

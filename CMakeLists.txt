@@ -15,3 +15,5 @@ add_subdirectory (${CMAKE_CURRENT_SOURCE_DIR}/Samples)
 
 message (STATUS "Adding SubDirectory 'UnitTests'")
 add_subdirectory (${CMAKE_CURRENT_SOURCE_DIR}/UnitTests)
+
+install(FILES README.md License.txt DESTINATION .)
